@@ -16,6 +16,10 @@ public class ProjetoServico {
     @Transactional
     public Projeto salvar(Projeto projeto){
 
+        if(projeto.getDescricao() == null || projeto.getDescricao().length() < 50) {
+            throw new RegraNegocioExcecao("Descreva o pensamento inicial do projeto (mínimo de 50 caracteres).");
+        }
+
         if(projeto.getPrazoConclusao() != null &&
             projeto.getPrazoConclusao().isBefore(projeto.getDataInicio())){
                 throw new RegraNegocioExcecao("Faz sentido o prazo de conclusão ser anterior à data de início?");

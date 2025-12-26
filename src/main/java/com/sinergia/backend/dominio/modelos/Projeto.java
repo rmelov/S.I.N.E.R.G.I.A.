@@ -1,6 +1,7 @@
 package com.sinergia.backend.dominio.modelos;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import java.time.LocalDate;
 
@@ -18,6 +19,7 @@ public class Projeto {
     private String nome;
 
     @Column(name = "DESCRICAO_PROJETO", nullable = false, columnDefinition = "TEXT")
+    @Size(min = 50, message = "Descreva o pensamento inicial do projeto (mínimo de 50 caracteres).")
     private String descricao;
 
     @Column(name = "DATA_INICIO", nullable = false)
@@ -28,6 +30,13 @@ public class Projeto {
 
     @ManyToOne
     @JoinColumn(name = "COD_STATUS_PROJETO", nullable = false)
-    private StatusProjeto staus;
+    private StatusProjeto status;
+
+    @PrePersist
+    protected void aoCriar() {
+        if (this.dataInicio == null) {
+            this.dataInicio = LocalDate.now();
+        }
+    }
 
 }

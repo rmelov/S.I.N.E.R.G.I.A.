@@ -16,12 +16,16 @@ public class DiscenteServico {
     @Transactional
     public Discente salvar(Discente discente){
 
-        if(!discente.getEmailInstitucional().endsWith("@fatec.sp.gov.br")){
+        if(!discente.getEmailInstitucional().trim().toLowerCase().endsWith("@fatec.sp.gov.br")){
             throw new RegraNegocioExcecao("E-mail não permitido; use o institucional.");
         }
 
         if(repositorio.existsByEmailInstitucional(discente.getEmailInstitucional())){
-            throw new RegraNegocioExcecao("Não; já está cadastrado.");
+            throw new RegraNegocioExcecao("E-mail já está cadastrado.");
+        }
+
+        if(repositorio.existsByRa(discente.getRa())){
+            throw new RegraNegocioExcecao("RA já está cadastrado.");
         }
 
         return repositorio.save(discente);

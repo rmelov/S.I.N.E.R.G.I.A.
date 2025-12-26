@@ -12,4 +12,6 @@ public interface DiscenteRepositorio extends JpaRepository<Discente, Integer>{
 
     boolean existsByEmailInstitucional(String email);
 
+    boolean existsByRa(String ra);
+
 }
