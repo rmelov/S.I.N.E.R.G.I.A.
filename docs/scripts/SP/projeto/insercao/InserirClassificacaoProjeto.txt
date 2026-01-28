@@ -1,0 +1,95 @@
+CREATE PROCEDURE sp_InserirClassificacaoProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @ClassificacaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    EXEC @Validacao = sp_ValidarClassificacaoProjeto
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @ClassificacaoID;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    CLASSIFICACAO_PROJETO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_CLASSIFICACAO = @ClassificacaoID
+            )
+            BEGIN
+                INSERT INTO CLASSIFICACAO_PROJETO(
+                        ID_PROJETO,
+                        ID_CLASSIFICACAO
+                    )
+                    OUTPUT 
+                        inserted.ID_CLASSIFICACAO_PROJETO
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @ProjetoID,
+                        @ClassificacaoID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_CLASSIFICACAO_PROJETO
+                FROM
+                    CLASSIFICACAO_PROJETO
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_CLASSIFICACAO = @ClassificacaoID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirClassificacaoProjeto
+    @DiscenteCursoInstituicaoID = 'x',
+    @ProjetoID = 'y',
+    @ClassificacaoID = 'z';
+*/

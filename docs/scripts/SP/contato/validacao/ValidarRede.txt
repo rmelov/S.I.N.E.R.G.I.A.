@@ -1,0 +1,58 @@
+CREATE PROCEDURE sp_ValidarRede
+    @DESIGNACAO NVARCHAR(255),
+    @DOMINIO VARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @DESIGNACAO IS NULL OR LEN(TRIM(@DESIGNACAO)) = 0
+    BEGIN
+        RAISERROR(
+            'Designação da rede não pode estar vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @DOMINIO IS NULL OR LEN(TRIM(@DOMINIO)) = 0
+    BEGIN
+        RAISERROR(
+            'O domínio da rede não pode estar vazio.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255 OR LEN(TRIM(@DOMINIO)) > 255
+    BEGIN
+        RAISERROR('Designação ou domínio de rede excedeu o máximo de caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @DOMINIO NOT LIKE '%_._%' OR @DOMINIO LIKE '% %'
+    BEGIN
+        RAISERROR(
+            'O domínio da rede não pode conter espaços e deve ser um domínio válido.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @DOMINIO LIKE '%[^a-zA-Z0-9.-]%'
+    BEGIN
+        RAISERROR(
+            'O domínio da rede contém caracteres inválidos (Use apenas letras, números, pontos ou hífens).',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

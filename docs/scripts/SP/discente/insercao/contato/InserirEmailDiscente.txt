@@ -1,0 +1,148 @@
+CREATE PROCEDURE sp_InserirEmailDiscente
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @EMAIL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    SET @EMAIL = LOWER(TRIM(@EMAIL));
+
+
+    EXEC @Validacao = sp_ValidarEmail
+        @EMAIL;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    
+    DECLARE @NovoEmailID UNIQUEIDENTIFIER;
+
+    IF EXISTS(
+        SELECT
+            1
+        FROM
+            EMAIL_DISCENTE ED
+        INNER JOIN
+            EMAIL E
+        ON
+            E.ID_EMAIL = ED.ID_EMAIL
+        INNER JOIN
+            DOMINIO_COMUM DC
+        ON
+            DC.ID_DOMINIO_COMUM = E.ID_DOMINIO_COMUM
+        WHERE
+            E.ENDERECO_EMAIL = LEFT(
+                @EMAIL,
+                CHARINDEX('@', @EMAIL) - 1
+            )
+        AND
+            DC.SUFIXO_DOMINIO = SUBSTRING(
+                @EMAIL,
+                CHARINDEX('@', @EMAIL),
+                LEN(@EMAIL)
+            )
+        AND
+            ED.ID_DISCENTE <> @DiscenteID
+    )
+    BEGIN
+        RAISERROR(
+            'Impossível vincular você ao e-mail de outra pessoa.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            EXEC sp_InserirEmail 
+                @EMAIL = @EMAIL, 
+                @EMAIL_ID = @NovoEmailID OUTPUT;
+
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    EMAIL_DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_EMAIL = @NovoEmailID
+            )
+            BEGIN
+                INSERT INTO
+                    EMAIL_DISCENTE(
+                        ID_EMAIL,
+                        ID_DISCENTE
+                )
+                OUTPUT 
+                    inserted.ID_EMAIL_DISCENTE
+                INTO
+                    @OutputID
+                VALUES(
+                    @NovoEmailID,
+                    @DiscenteID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_EMAIL_DISCENTE
+                FROM
+                    EMAIL_DISCENTE
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_EMAIL = @NovoEmailID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirEmailDiscente
+    @DiscenteCursoInstituicaoID = 'x',
+    @EMAIL = 'sisifo@icq.com';
+*/

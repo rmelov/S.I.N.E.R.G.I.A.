@@ -1,0 +1,96 @@
+CREATE PROCEDURE sp_InserirCursoRequisitado
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @CursoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    
+    EXEC @Validacao = sp_ValidarCursoRequisitado
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @CursoID;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    CURSO_REQUISITADO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_CURSO = @CursoID
+            )
+            BEGIN
+                INSERT INTO
+                    CURSO_REQUISITADO(
+                        ID_PROJETO,
+                        ID_CURSO
+                    )
+                    OUTPUT 
+                        inserted.ID_CURSO_REQUISITADO
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @ProjetoID,
+                        @CursoID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_CURSO_REQUISITADO
+                FROM
+                    CURSO_REQUISITADO
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_CURSO = @CursoID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirCursoRequisitado
+    @DiscenteCursoInstituicaoID = 'x',
+    @ProjetoID = 'y',
+    @CursoID = 'z';
+*/

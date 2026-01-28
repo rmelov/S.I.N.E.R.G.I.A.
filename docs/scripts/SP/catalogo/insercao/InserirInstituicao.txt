@@ -1,0 +1,104 @@
+CREATE PROCEDURE sp_InserirInstituicao
+    @DESIGNACAO NVARCHAR(500),
+    @ACRONIMO VARCHAR(255),
+    @MASCARA VARCHAR(300),
+    @TAMANHO_MIN INT,
+    @TAMANHO_MAX INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+    SET @ACRONIMO = UPPER(TRIM(@ACRONIMO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarInstituicao
+        @DESIGNACAO,
+        @ACRONIMO,
+        @MASCARA,
+        @TAMANHO_MIN,
+        @TAMANHO_MAX;
+    
+    IF @Validacao <> 0 RETURN @Validacao; 
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    INSTITUICAO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_INSTITUICAO = @DESIGNACAO
+                OR
+                    ACRONIMO_INSTITUICAO = @ACRONIMO
+            )
+            BEGIN
+                INSERT INTO INSTITUICAO(
+                    DESIGNACAO_INSTITUICAO, 
+                    ACRONIMO_INSTITUICAO,
+                    RA_MASCARA,
+                    RA_QUANTIDADE_MIN_CARACTERES,
+                    RA_QUANTIDADE_MAX_CARACTERES
+                )
+                OUTPUT
+                    inserted.ID_INSTITUICAO
+                INTO
+                    @OutputID
+                VALUES(
+                    @DESIGNACAO,
+                    @ACRONIMO,
+                    @MASCARA,
+                    @TAMANHO_MIN,
+                    @TAMANHO_MAX
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_INSTITUICAO
+                FROM
+                    INSTITUICAO
+                WHERE
+                    DESIGNACAO_INSTITUICAO = @DESIGNACAO
+                OR
+                    ACRONIMO_INSTITUICAO = @ACRONIMO;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+        
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirInstituicao
+    @DESIGNACAO = 'faculdade de tecnologia',
+    @ACRONIMO = 'fatec',
+    @MASCARA = '%[^0-9]%',
+    @TAMANHO_MIN = 15,
+    @TAMANHO_MAX = 15;
+*/

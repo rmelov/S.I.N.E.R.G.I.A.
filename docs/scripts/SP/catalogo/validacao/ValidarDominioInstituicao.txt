@@ -1,0 +1,33 @@
+CREATE PROCEDURE sp_ValidarDominioInstituicao
+    @SUFIXO VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @SUFIXO IS NULL
+    OR LEN(TRIM(@SUFIXO)) = 0
+    OR LEN(TRIM(@SUFIXO)) > 100
+    BEGIN
+        RAISERROR(
+            'O domínio de e-mail não pode ser nulo, vazio ou exceder a quantidade máxima de caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @SUFIXO LIKE '% %'
+    OR @SUFIXO LIKE '%@%@%'
+    OR @SUFIXO NOT LIKE '@%.%'
+    OR @SUFIXO LIKE '@%[^a-z0-9.-]%'
+    BEGIN
+        RAISERROR(
+            'Verifique o formato e caracteres válidos para o domínio de e-mail.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

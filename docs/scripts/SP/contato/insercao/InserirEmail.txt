@@ -1,0 +1,98 @@
+CREATE PROCEDURE sp_InserirEmail
+    @EMAIL VARCHAR(500),
+    @EMAIL_ID UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    
+    SET @EMAIL = LOWER(TRIM(@EMAIL));
+
+    DECLARE @Prefixo VARCHAR(255);
+    DECLARE @Sufixo VARCHAR(255);
+    DECLARE @DominioID UNIQUEIDENTIFIER;
+
+    SET @Prefixo = LEFT(@EMAIL, CHARINDEX('@', @EMAIL) - 1);
+    SET @Sufixo = SUBSTRING(@EMAIL, CHARINDEX('@', @EMAIL), LEN(@EMAIL));
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            SELECT
+                @DominioID = ID_DOMINIO_COMUM 
+            FROM
+                DOMINIO_COMUM
+            WITH(
+                UPDLOCK,
+                HOLDLOCK
+            )
+            WHERE
+                SUFIXO_DOMINIO = @Sufixo;
+
+            IF @DominioID IS NULL
+            BEGIN
+                DECLARE @OutputID TABLE(
+                    NovoID UNIQUEIDENTIFIER
+                );
+
+                INSERT INTO DOMINIO_COMUM(
+                    SUFIXO_DOMINIO
+                )
+                OUTPUT
+                    inserted.ID_DOMINIO_COMUM
+                INTO
+                    @OutputID
+                VALUES(
+                    @Sufixo
+                );
+                
+                SELECT
+                    @DominioID = NovoID
+                FROM
+                    @OutputID;
+            END
+
+            SELECT 
+                @EMAIL_ID = ID_EMAIL 
+            FROM
+                EMAIL
+            WITH(
+                UPDLOCK,
+                HOLDLOCK
+            )
+            WHERE
+                ENDERECO_EMAIL = @Prefixo
+            AND
+                ID_DOMINIO_COMUM = @DominioID;
+
+            IF @EMAIL_ID IS NULL
+            BEGIN
+                DECLARE @OutputEmail TABLE(
+                    NovoEmailID UNIQUEIDENTIFIER
+                );
+                INSERT INTO EMAIL(
+                    ENDERECO_EMAIL,
+                    ID_DOMINIO_COMUM
+                )
+                OUTPUT
+                    inserted.ID_EMAIL
+                INTO
+                    @OutputEmail
+                VALUES(
+                    @Prefixo,
+                    @DominioID
+                );
+
+                SELECT
+                    @EMAIL_ID = NovoEmailID
+                FROM
+                    @OutputEmail;
+            END
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;

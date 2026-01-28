@@ -1,0 +1,69 @@
+CREATE PROCEDURE sp_ValidarInstituicao
+    @DESIGNACAO NVARCHAR(500),
+    @ACRONIMO VARCHAR(255),
+    @MASCARA VARCHAR(300),
+    @TAMANHO_MIN INT,
+    @TAMANHO_MAX INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @DESIGNACAO IS NULL
+    OR @ACRONIMO IS NULL
+    OR LEN(TRIM(@DESIGNACAO)) = 0
+    OR LEN(TRIM(@ACRONIMO)) = 0        
+    BEGIN
+        RAISERROR(
+            'A designação e o acrônimo não podem ser nulos ou vazios.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255
+    OR LEN(TRIM(@ACRONIMO)) > 100
+    OR LEN(TRIM(@MASCARA)) > 100
+    BEGIN
+        RAISERROR(
+            'Caracteres excedidos.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+    
+    IF(
+        @TAMANHO_MIN IS NOT NULL
+        AND @TAMANHO_MAX IS NULL
+    ) 
+    OR(
+        @TAMANHO_MIN IS NULL
+        AND @TAMANHO_MAX IS NOT NULL
+    )
+    BEGIN
+        RAISERROR(
+            'Para definir uma regra de tamanho, informe os limites mínimo e máximo.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @TAMANHO_MIN IS NOT NULL
+    AND @TAMANHO_MAX IS NOT NULL
+    BEGIN
+        IF @TAMANHO_MIN < 0
+        OR @TAMANHO_MAX < @TAMANHO_MIN
+        BEGIN
+            RAISERROR(
+                'Intervalo de tamanho do RA inválido.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+    END
+
+    RETURN 0;
+END;

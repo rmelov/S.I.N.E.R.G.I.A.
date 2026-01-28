@@ -1,0 +1,64 @@
+CREATE PROCEDURE sp_ValidarAreaAtuacaoProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @AreaAtuacaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ProjetoID IS NULL
+    OR @AreaAtuacaoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Identificação de projeto e area de atuação é obrigatória.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @OrdensAutoria INT;
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+    DECLARE @ApoioTecnicoID UNIQUEIDENTIFIER;
+
+    EXEC @OrdensAutoria = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT,
+        @ApoioTecnicoID = @ApoioTecnicoID OUTPUT;
+
+    IF @OrdensAutoria <> 0 RETURN 1;
+
+
+    DECLARE @Permissao INT;
+
+    EXEC @Permissao = sp_ValidarProjetoPermissaoTecnica
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID,
+        @ApoioTecnicoID;
+
+    IF @Permissao <> 0 RETURN 1;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            AREA_ATUACAO
+        WHERE
+            ID_AREA_ATUACAO = @AreaAtuacaoID
+    )
+    BEGIN
+        RAISERROR(
+            'Área de atuação não encontrada na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+      
+    RETURN 0;
+END;

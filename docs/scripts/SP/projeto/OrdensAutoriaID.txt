@@ -1,0 +1,56 @@
+CREATE PROCEDURE sp_OrdensAutoriaID
+    @AutoriaPrincipalID UNIQUEIDENTIFIER = NULL OUTPUT,
+    @CoAutoriaID UNIQUEIDENTIFIER = NULL OUTPUT,
+    @ApoioTecnicoID UNIQUEIDENTIFIER = NULL OUTPUT,
+    @DesenvolvimentoID UNIQUEIDENTIFIER = NULL OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT
+        @AutoriaPrincipalID = MAX(
+            CASE WHEN
+                DESIGNACAO_PARAMETRO = 'ORDEM_AUTORIA_PRINCIPAL'
+            THEN
+                ID_ORDEM_AUTORIA
+            END
+        ),
+        @CoAutoriaID = MAX(
+            CASE WHEN
+                DESIGNACAO_PARAMETRO = 'ORDEM_AUTORIA_COAUTORIA'
+            THEN
+                ID_ORDEM_AUTORIA
+            END
+        ),
+        @ApoioTecnicoID = MAX(
+            CASE WHEN
+                DESIGNACAO_PARAMETRO = 'ORDEM_AUTORIA_APOIO_TECNICO'
+            THEN
+                ID_ORDEM_AUTORIA
+            END
+        ),
+        @DesenvolvimentoID = MAX(
+            CASE WHEN
+                DESIGNACAO_PARAMETRO = 'ORDEM_AUTORIA_DESENVOLVIMENTO'
+            THEN
+                ID_ORDEM_AUTORIA
+            END
+        )
+    FROM
+        PARAMETRO_HIERARQUIA;
+
+    IF @AutoriaPrincipalID IS NULL
+    OR @CoAutoriaID IS NULL
+    OR @ApoioTecnicoID IS NULL
+    OR @DesenvolvimentoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Houve um erro interno: parâmetros não encontrados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

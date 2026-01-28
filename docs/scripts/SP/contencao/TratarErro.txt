@@ -1,0 +1,175 @@
+CREATE PROCEDURE sp_TratarErro
+AS
+BEGIN
+    DECLARE @ErroNum INT = ERROR_NUMBER();
+    DECLARE @ErroMsg NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @OutputMsg NVARCHAR(4000);
+
+    IF @ErroNum = 547
+    BEGIN
+        SET @OutputMsg = CASE 
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]DESCRICAO[_]PROJETO%'
+            THEN
+                'Descreva o pensamento inicial do projeto (mínimo de 30 caracteres).'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]PRAZO[_]PROJETO%'
+            THEN
+                'O prazo de conclusão do projeto não deve ser anterior à sua data início.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]%[_]SLUG[_]CHAR%'
+            THEN
+                'O identificador (slug) deve ser composto exclusivamente por caracteres alfanuméricos básicos (números e letras de A a Z sem acentuação ou cedilha), pontos (.), sublinhados ([_]) e hifens (-); não sendo permitido o uso de espaços ou qualquer outro caractere especial.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]%[_]SLUG%'
+            THEN
+                'O identificador (slug) deve ser entre 1 e 42 caracteres.'
+            
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]DISCENTE[_]RA[_]FORMATO%'
+            THEN
+                'Verifique o formato válido para o RA.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]DISCENTE[_]RA[_]CHAR%'
+            THEN
+                'O RA deve conter apenas caracteres alfanuméricos (letras e números).'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]EMAIL[_]FORMATO%'
+            THEN
+                'E-mail com formato inválido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]TELEFONE[_]FORMATO%'
+            THEN
+                'Telefone com formato inválido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]%[_]HIER%'
+            THEN
+                'Deve-se iniciar a ordem de hierarquia em 1.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]%[_]DESI%'
+            THEN
+                'Verifique o mínimo de caracteres para designação.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]EMAIL[_]ENDE%'
+            THEN
+                'Número mínimo de carecteres para e-mail não atingido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]DOMINIO[_]INSTITUCIONAL[_]SUFIX%'
+            THEN
+                'Número mínimo para sufixo não atingido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]DOMINIO[_]INSTITUCIONAL[_]CHAR%'
+            THEN
+                'O sufixo de domínio institucional deve conter apenas letras minúsculas, números, pontos e hifens.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]NOME[_]DOMINIO[_]REDE%'
+            THEN
+                'Mínimo para nome de domínio da rede não atingido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]MINIMO[_]REDE[_]%[_]URL%'
+            THEN
+                'Mínimo para URL não atingido.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]REDE[_]DOMINIO[_]CHAR%'
+            THEN
+                'O domínio de rede deve ser composto exclusivamente por caracteres alfanuméricos básicos (números e letras de A a Z sem acentuação ou cedilha), pontos (.) e hifens (-); não sendo permitido o uso de espaços ou qualquer outro caractere especial.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]REDE[_]%[_]URL[_]CHAR%'
+            THEN
+                'URL de rede deve ser composto exclusivamente por caracteres alfanuméricos básicos (números e letras de A a Z sem acentuação ou cedilha), pontos (.), dois pontos (:), sublinhados (_), barra (/) e hifens (-); não sendo permitido o uso de espaços ou qualquer outro caractere especial.'
+            
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]EMAIL[_]CHAR%'
+            THEN
+                'Verifique os caracteres inválidos do e-mail.'
+            
+            WHEN
+                @ErroMsg
+            LIKE
+                '%CK[_]EMAIL[_]INSTITUCIONAL[_]CHAR%'
+            THEN
+                'Verifique os caracteres inválidos do e-mail.'
+
+            WHEN
+                @ErroMsg
+            LIKE
+                '%FK[_]%'
+            THEN
+                'Não é possível realizar esta operação: um registro relacionado não foi encontrado ou ainda está em uso.'
+
+            ELSE 'Violação de regra de integridade: ' + @ErroMsg
+        END
+    END
+
+    ELSE IF @ErroNum IN (2627, 2601)
+    BEGIN
+        SET @OutputMsg = 'Registro já existente no sistema.'
+    END
+
+    ELSE IF @ErroNum IN (8114, 245)
+    BEGIN
+        SET @OutputMsg = 'Erro de entrada de dados: Verifique se os identificadores (IDs) ou valores numéricos foram passados corretamente.'
+    END
+
+    ELSE
+    BEGIN
+        SET @OutputMsg = 'Erro inesperado no banco de dados: ' + @ErroMsg
+    END
+
+    RAISERROR(
+        @OutputMsg,
+        16,
+        1
+    );
+END;

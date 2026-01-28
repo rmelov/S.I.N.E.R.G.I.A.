@@ -1,0 +1,192 @@
+CREATE PROCEDURE sp_InserirDiscente
+    @CursoInstituicaoID UNIQUEIDENTIFIER,
+    @RA VARCHAR(200),
+    @DESIGNACAO NVARCHAR(500),
+    @EMAIL_INSTITUCIONAL VARCHAR(500),
+    @SLUG VARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @EMAIL_INSTITUCIONAL = LOWER(TRIM(@EMAIL_INSTITUCIONAL));
+    SET @SLUG = LOWER(TRIM(@SLUG));
+
+    DECLARE @Validacao INT;
+    DECLARE @SLUG_CHECADO VARCHAR(42);
+
+    EXEC @Validacao = sp_ValidarDiscente
+        @CursoInstituicaoID,
+        @RA,
+        @DESIGNACAO,
+        @EMAIL_INSTITUCIONAL,
+        @SLUG,
+        @SLUG_CHECADO OUTPUT;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @NovoDiscenteID UNIQUEIDENTIFIER;
+    DECLARE @NovoEmailID UNIQUEIDENTIFIER;
+    DECLARE @StatusID UNIQUEIDENTIFIER;
+    DECLARE @DominioID UNIQUEIDENTIFIER;
+
+    SELECT
+        @StatusID = ID_STATUS_DISCENTE
+    FROM
+        PARAMETRO_HIERARQUIA
+    WHERE
+        DESIGNACAO_PARAMETRO = 'STATUS_DISCENTE_INICIAL';
+
+    IF @StatusID IS NULL
+    BEGIN
+        RAISERROR(
+            'Status inicial não configurado na base de dados.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    SELECT
+        TOP 1 @DominioID = ID_DOMINIO_INSTITUICAO 
+    FROM
+        DOMINIO_INSTITUICAO 
+    WHERE RIGHT(
+        @EMAIL_INSTITUCIONAL,
+        LEN(SUFIXO_DOMINIO)
+    ) = SUFIXO_DOMINIO;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+        
+        BEGIN TRANSACTION    
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_DISCENTE = @DESIGNACAO
+                AND
+                    SLUG_DISCENTE = @SLUG_CHECADO
+            )
+            BEGIN
+                INSERT INTO
+                    DISCENTE(
+                        DESIGNACAO_DISCENTE,
+                        SLUG_DISCENTE,
+                        ID_STATUS_DISCENTE
+                    )
+                    OUTPUT
+                        inserted.ID_DISCENTE
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @DESIGNACAO,
+                        @SLUG_CHECADO,
+                        @StatusID
+                );
+
+                SELECT
+                    @NovoDiscenteID = NovoID
+                FROM
+                    @OutputID;
+
+                DELETE FROM @OutputID;
+                        
+                INSERT INTO
+                    DISCENTE_CURSO_INSTITUICAO(
+                        ID_DISCENTE,
+                        ID_CURSO_INSTITUICAO,
+                        RA_DISCENTE
+                    )
+                    VALUES(
+                        @NovoDiscenteID,
+                        @CursoInstituicaoID,
+                        @RA
+                );
+
+                INSERT INTO
+                    EMAIL_INSTITUCIONAL(
+                        ENDERECO_EMAIL_INSTITUCIONAL,
+                        ID_DOMINIO_INSTITUICAO
+                    )
+                    OUTPUT
+                        inserted.ID_EMAIL_INSTITUCIONAL
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @EMAIL_INSTITUCIONAL,
+                        @DominioID
+                );
+
+                SELECT
+                    @NovoEmailID = NovoID
+                FROM
+                    @OutputID;
+                
+                INSERT INTO
+                    EMAIL_INSTITUCIONAL_DISCENTE(
+                        ID_DISCENTE,
+                        ID_EMAIL_INSTITUCIONAL
+                    )
+                    VALUES(
+                        @NovoDiscenteID,
+                        @NovoEmailID
+                );
+
+                DELETE FROM @OutputID;
+                
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                VALUES(
+                    @NovoDiscenteID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_DISCENTE
+                FROM
+                    DISCENTE
+                WHERE
+                    DESIGNACAO_DISCENTE = @DESIGNACAO
+                AND
+                    SLUG_DISCENTE = @SLUG_CHECADO;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirDiscente
+    @CursoInstituicaoID = 'x',
+    @RA = '123456789101213',
+    @DESIGNACAO = 'Sísifo Félix Rocha Caino da Pena',
+    @EMAIL_INSTITUCIONAL = 'sisifo.dapena@fatec.sp.gov.br',
+    @SLUG = 'sisifoda';
+*/

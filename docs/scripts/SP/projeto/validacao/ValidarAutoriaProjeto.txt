@@ -1,0 +1,175 @@
+CREATE PROCEDURE sp_ValidarAutoriaProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @DiscenteAutoriaID UNIQUEIDENTIFIER,
+    @OrdemAutoriaID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ProjetoID IS NULL
+    OR @OrdemAutoriaID IS NULL
+    BEGIN
+        RAISERROR(
+            'Identificação de projeto e ordem de autoria é obrigatória.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @OrdensAutoria INT;
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+    DECLARE @ApoioTecnicoID UNIQUEIDENTIFIER;
+    DECLARE @DesenvolvimentoID UNIQUEIDENTIFIER;
+
+    EXEC @OrdensAutoria = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT,
+        @ApoioTecnicoID = @ApoioTecnicoID OUTPUT,
+        @DesenvolvimentoID = @DesenvolvimentoID OUTPUT;
+
+    IF @OrdensAutoria <> 0 RETURN 1;
+
+
+    DECLARE @Permissao INT;
+
+    EXEC @Permissao = sp_ValidarProjetoPermissaoGestao
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID;
+
+    IF @Permissao <> 0 RETURN 1;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            ORDEM_AUTORIA
+        WHERE
+            ID_ORDEM_AUTORIA = @OrdemAutoriaID
+    )
+    BEGIN
+        RAISERROR(
+            'Ordem de autoria não encontrada na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @OrdemAutoriaID IN (@AutoriaPrincipalID, @CoAutoriaID)
+    BEGIN
+        IF EXISTS(
+            SELECT
+                1 
+            FROM
+                AUTORIA_PROJETO 
+            WHERE
+                ID_PROJETO = @ProjetoID 
+            AND
+                ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteAutoriaID
+            AND
+                ID_ORDEM_AUTORIA
+            IN
+                (@AutoriaPrincipalID, @CoAutoriaID)
+        )
+        BEGIN
+            RAISERROR(
+                'Não é possível assumir o papel de autoria principal e co-autoria em um mesmo projeto.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+    END
+
+
+    IF @OrdemAutoriaID IN (@ApoioTecnicoID, @DesenvolvimentoID)
+    BEGIN
+        IF NOT EXISTS(
+            SELECT 
+                1
+            FROM
+                CURSO_REQUISITADO CR
+            INNER JOIN
+                CURSO_INSTITUICAO CI
+            ON
+                CR.ID_CURSO = CI.ID_CURSO
+            INNER JOIN
+                DISCENTE_CURSO_INSTITUICAO DCI
+            ON
+                CI.ID_CURSO_INSTITUICAO = DCI.ID_CURSO_INSTITUICAO
+            WHERE
+                CR.ID_PROJETO = @ProjetoID
+            AND
+                DCI.ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteAutoriaID
+        )
+        BEGIN
+            RAISERROR(
+                'Discente não pertence a nenhum curso requisitado pelo projeto.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+
+        IF @OrdemAutoriaID = @DesenvolvimentoID
+        BEGIN
+            IF EXISTS(
+                SELECT
+                    1
+                FROM
+                    HABILIDADE_REQUISITADA
+                WHERE
+                    ID_PROJETO = @ProjetoID
+            )
+            BEGIN
+                IF NOT EXISTS(
+                    SELECT 
+                        1
+                    FROM
+                        HABILIDADE_REQUISITADA HR
+                    INNER JOIN
+                        DISCENTE_HABILIDADE DH
+                    ON
+                        HR.ID_HABILIDADE = DH.ID_HABILIDADE
+                    INNER JOIN
+                        DISCENTE_CURSO_INSTITUICAO DCI
+                    ON
+                        DH.ID_DISCENTE = DCI.ID_DISCENTE
+                    WHERE
+                        HR.ID_PROJETO = @ProjetoID
+                    AND
+                        DCI.ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteAutoriaID
+                )
+                BEGIN
+                    RAISERROR(
+                        'Discente deve possuir alguma das habilidades técnicas requisitadas para desenvolvimento deste projeto.',
+                        16,
+                        1
+                    );
+                    RETURN 1;
+                END
+            END
+
+            ELSE
+            BEGIN
+                RAISERROR(
+                    'Nenhuma habilidade técnica vinculada aos requisitos deste projeto: impossível assumir ordem de autoria relacionada ao desenvolvimento.',
+                    16,
+                    1
+                );
+                RETURN 1;
+            END
+        END
+    END
+
+    RETURN 0;
+END;

@@ -1,0 +1,123 @@
+CREATE PROCEDURE sp_ValidarDiscente
+    @CursoInstituicaoID UNIQUEIDENTIFIER,
+    @RA VARCHAR(200),
+    @DESIGNACAO NVARCHAR(500),
+    @EMAIL_INSTITUCIONAL VARCHAR(500),
+    @SLUG VARCHAR(100),
+    @SLUG_CHECADO VARCHAR(42) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @CursoInstituicaoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Informe a instituição e curso.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            ID_CURSO_INSTITUICAO
+        FROM
+            CURSO_INSTITUICAO
+        WHERE
+            ID_CURSO_INSTITUICAO = @CursoInstituicaoID
+    )
+    BEGIN
+        RAISERROR(
+            'Instituição e curso não encontrados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @DESIGNACAO IS NULL OR LEN(TRIM(@DESIGNACAO)) = 0
+    BEGIN
+        RAISERROR(
+            'Designação não pode estar vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255
+    BEGIN
+        RAISERROR(
+            'Quantidade de caracteres excessiva em designação.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @ValidacaoRA INT;
+
+    EXEC @ValidacaoRA = sp_ValidarRA
+        @CursoInstituicaoID,
+        @RA;
+    
+    IF @ValidacaoRA <> 0 RETURN 1;
+
+
+    DECLARE @ValidacaoEmail INT;
+
+    EXEC @ValidacaoEmail = sp_ValidarEmail
+        @EMAIL_INSTITUCIONAL;
+    
+    IF @ValidacaoEmail <> 0 RETURN 1;
+
+
+    DECLARE @ValidacaoEmailInstitucional INT;
+
+    EXEC @ValidacaoEmailInstitucional = sp_ValidarEmailInstitucional
+        @CursoInstituicaoID,
+        @EMAIL_INSTITUCIONAL;
+    
+    IF @ValidacaoEmailInstitucional <> 0 RETURN 1;
+
+
+    IF @SLUG IS NULL OR LEN(TRIM(@SLUG)) = 0
+    BEGIN
+        RAISERROR(
+            'Slug não pode estar vazio.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    SET @SLUG_CHECADO = @SLUG
+
+    WHILE EXISTS(
+        SELECT 
+            1
+        FROM
+            DISCENTE
+        WHERE
+            SLUG_DISCENTE = @SLUG_CHECADO
+    )
+    BEGIN
+        SET @SLUG_CHECADO = LEFT(@SLUG_CHECADO, 37) +
+            CAST(CAST(RAND()*1000 AS INT) AS VARCHAR);
+    END
+
+    IF LEN(TRIM(@SLUG_CHECADO)) > 42
+        BEGIN
+            RAISERROR(
+                'Quantidade de caracteres excedida em slug.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+    RETURN 0;
+END;

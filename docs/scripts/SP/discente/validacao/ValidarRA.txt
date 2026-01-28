@@ -1,0 +1,93 @@
+CREATE PROCEDURE sp_ValidarRA
+    @CursoInstituicaoID UNIQUEIDENTIFIER,
+    @RA VARCHAR(200)
+AS
+BEGIN
+    SET NOCOUNT ON;
+        IF @RA IS NULL OR LEN(TRIM(@RA)) = 0
+        BEGIN
+            RAISERROR(
+                'RA não pode estar vazio.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF LEN(TRIM(@RA)) > 100
+        BEGIN
+            RAISERROR(
+                'Caracteres excedidos em RA.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        DECLARE @InstituicaoID UNIQUEIDENTIFIER;
+        DECLARE @Mascara VARCHAR(100);
+        DECLARE @Min INT;
+        DECLARE @Max INT;
+
+        SELECT
+            @InstituicaoID = ID_INSTITUICAO
+        FROM
+            CURSO_INSTITUICAO
+        WHERE
+            ID_CURSO_INSTITUICAO = @CursoInstituicaoID;
+
+        SELECT 
+            @Mascara = RA_MASCARA,
+            @Min = RA_QUANTIDADE_MIN_CARACTERES,
+            @Max = RA_QUANTIDADE_MAX_CARACTERES
+        FROM
+            INSTITUICAO
+        WHERE
+            ID_INSTITUICAO = @InstituicaoID;
+
+        IF @Mascara IS NOT NULL
+        AND @RA LIKE @Mascara
+        BEGIN
+            RAISERROR(
+                'Revise o formato do RA para sua instituição.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF LEN(@RA) NOT BETWEEN COALESCE(@Min, 0) AND COALESCE(@Max, 99)
+        BEGIN
+            RAISERROR(
+                'Houve um equívoco de caracteres em RA.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF EXISTS(
+            SELECT 
+                1
+            FROM
+                DISCENTE_CURSO_INSTITUICAO DCI
+            INNER JOIN
+                CURSO_INSTITUICAO CI
+            ON
+                DCI.ID_CURSO_INSTITUICAO = CI.ID_CURSO_INSTITUICAO
+            WHERE
+                DCI.RA_DISCENTE = @RA
+            AND
+                CI.ID_INSTITUICAO = @InstituicaoID
+        )
+        BEGIN
+            RAISERROR(
+                'RA já cadastrado para esta instituição.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+    RETURN 0;
+END;

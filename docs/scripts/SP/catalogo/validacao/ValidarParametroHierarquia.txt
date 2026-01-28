@@ -1,0 +1,184 @@
+CREATE PROCEDURE sp_ValidarParametroHierarquia
+    @DESIGNACAO NVARCHAR(500),
+    @DESCRICAO VARCHAR(700),
+    @StatusProjetoID UNIQUEIDENTIFIER,
+    @StatusDiscenteID UNIQUEIDENTIFIER,
+    @OrdemAutoriaID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @DESIGNACAO IS NULL
+    OR LEN(TRIM(@DESIGNACAO)) = 0
+    OR @DESCRICAO IS NULL
+    OR LEN(TRIM(@DESCRICAO)) = 0
+    BEGIN
+        RAISERROR(
+            'Designação e descrição de parâmetro são dados obrigatórios.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255
+    BEGIN
+        RAISERROR(
+            'Designação de parâmetro deve ter, no máximo, 255 caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESCRICAO)) > 500
+    BEGIN
+        RAISERROR(
+            'Descrição de parâmetro deve ter, no máximo, 500 caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @SomaIDs INT;
+    SET @SomaIDs = 
+        (CASE WHEN @StatusProjetoID IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN @StatusDiscenteID IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN @OrdemAutoriaID IS NOT NULL THEN 1 ELSE 0 END);
+
+    IF @SomaIDs = 0
+    BEGIN
+        RAISERROR(
+            'Você deve fornecer um ID de referência para este parâmetro.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @SomaIDs > 1
+    BEGIN
+        RAISERROR(
+            'Um parâmetro não pode referenciar múltiplas tabelas simultaneamente.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @StatusProjetoID IS NOT NULL
+    BEGIN
+        IF NOT EXISTS(
+            SELECT
+                1
+            FROM
+                STATUS_PROJETO
+            WHERE
+                ID_STATUS_PROJETO = @StatusProjetoID
+        )
+        BEGIN
+            RAISERROR(
+                'O ID de status de projeto fornecido não existe na base de dados.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF EXISTS(
+            SELECT
+                1
+            FROM
+                PARAMETRO_HIERARQUIA
+            WHERE
+                ID_STATUS_PROJETO = @StatusProjetoID
+        )
+        BEGIN
+            RAISERROR(
+                'Este ID de status de projeto já foi cadastrado como parâmetro.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+    END
+
+    ELSE IF @StatusDiscenteID IS NOT NULL
+    BEGIN
+        IF NOT EXISTS(
+            SELECT
+                1
+            FROM
+                STATUS_DISCENTE
+            WHERE
+                ID_STATUS_DISCENTE = @StatusDiscenteID
+        )
+        BEGIN
+            RAISERROR(
+                'O ID de status de discente fornecido não existe na base de dados.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF EXISTS(
+            SELECT
+                1
+            FROM
+                PARAMETRO_HIERARQUIA
+            WHERE
+                ID_STATUS_DISCENTE = @StatusDiscenteID
+        )
+        BEGIN
+            RAISERROR(
+                'Este ID de status de discente já foi cadastrado como parâmetro.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+    END
+
+    ELSE IF @OrdemAutoriaID IS NOT NULL
+    BEGIN
+        IF NOT EXISTS(
+            SELECT
+                1
+            FROM
+                ORDEM_AUTORIA
+            WHERE
+                ID_ORDEM_AUTORIA = @OrdemAutoriaID
+        )
+        BEGIN
+            RAISERROR(
+                'O ID de ordem de autoria fornecido não existe na base de dados.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+        IF EXISTS(
+            SELECT
+                1
+            FROM
+                PARAMETRO_HIERARQUIA
+            WHERE
+                ID_ORDEM_AUTORIA = @OrdemAutoriaID
+        )
+        BEGIN
+            RAISERROR(
+                'Este ID de ordem de autoria já foi cadastrado como parâmetro.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+    END
+
+    RETURN 0;
+END;

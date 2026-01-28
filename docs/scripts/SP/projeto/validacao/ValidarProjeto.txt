@@ -1,0 +1,105 @@
+CREATE PROCEDURE sp_ValidarProjeto
+    @DESIGNACAO NVARCHAR(500),
+    @DESCRICAO NVARCHAR(4000),
+    @DATA_INICIO DATE,
+    @PRAZO DATE,
+    @SLUG VARCHAR(100),
+    @SLUG_CHECADO VARCHAR(42) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @DESIGNACAO IS NULL OR LEN(TRIM(@DESIGNACAO)) = 0
+    BEGIN
+        RAISERROR(
+            'Designação não pode estar vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255
+    BEGIN
+        RAISERROR(
+            'Quantidade de caracteres excessiva em designação.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @DESCRICAO IS NULL
+    OR LEN(TRIM(@DESCRICAO)) = 0
+    BEGIN
+        RAISERROR(
+            'Descrição não pode estar vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESCRICAO)) < 30
+    OR LEN(TRIM(@DESCRICAO)) > 3500
+    BEGIN
+        RAISERROR(
+            'A descrição do projeto deve conter entre 30 e 3500 caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @PRAZO IS NOT NULL
+    AND @DATA_INICIO > @PRAZO
+    BEGIN
+        RAISERROR(
+            'O prazo de conclusão do projeto não pode ser anterior à sua data de início.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    IF @SLUG IS NULL
+    OR LEN(TRIM(@SLUG)) = 0
+    BEGIN
+        RAISERROR(
+            'Slug não pode estar vazio.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    SET @SLUG_CHECADO = @SLUG
+
+    WHILE EXISTS(
+        SELECT 
+            1
+        FROM
+            PROJETO
+        WHERE
+            SLUG_PROJETO = @SLUG_CHECADO
+    )
+    BEGIN
+        SET @SLUG_CHECADO = LEFT(@SLUG_CHECADO, 37) +
+            CAST(CAST(RAND()*1000 AS INT) AS VARCHAR);
+    END
+
+    IF LEN(TRIM(@SLUG_CHECADO)) > 42
+        BEGIN
+            RAISERROR(
+                'Quantidade de caracteres excedida em slug.',
+                16,
+                1
+            );
+            RETURN 1;
+        END
+
+    RETURN 0;
+END;

@@ -1,0 +1,107 @@
+CREATE PROCEDURE sp_ValidarHabilidadeRequisitada
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @HabilidadeID UNIQUEIDENTIFIER,
+    @NivelHabilidadeID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ProjetoID IS NULL
+    OR @HabilidadeID IS NULL
+    OR @NivelHabilidadeID IS NULL
+    BEGIN
+        RAISERROR(
+            'Identificação de projeto, habilidade e seu respectível nível é obrigatória.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @OrdensAutoria INT;
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+    DECLARE @ApoioTecnicoID UNIQUEIDENTIFIER;
+
+    EXEC @OrdensAutoria = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT,
+        @ApoioTecnicoID = @ApoioTecnicoID OUTPUT;
+
+    IF @OrdensAutoria <> 0 RETURN 1;
+
+
+    DECLARE @Permissao INT;
+
+    EXEC @Permissao = sp_ValidarProjetoPermissaoTecnica
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID,
+        @ApoioTecnicoID;
+
+    IF @Permissao <> 0 RETURN 1;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            HABILIDADE
+        WHERE
+            ID_HABILIDADE = @HabilidadeID
+    )
+    BEGIN
+        RAISERROR(
+            'Habilidade não encontrada na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            NIVEL_HABILIDADE
+        WHERE
+            ID_NIVEL_HABILIDADE = @NivelHabilidadeID
+    )
+    BEGIN
+        RAISERROR(
+            'Nível de habilidade não encontrado na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+      
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            CURSO_REQUISITADO CR
+        INNER JOIN
+            HABILIDADE_CURSO HC
+        ON 
+            HC.ID_CURSO = CR.ID_CURSO
+        WHERE
+            HC.ID_HABILIDADE = @HabilidadeID
+        AND
+            CR.ID_PROJETO = @ProjetoID
+    )
+    BEGIN
+        RAISERROR(
+            'Habilidade inexistente nos cursos requisitados registrados para este projeto.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

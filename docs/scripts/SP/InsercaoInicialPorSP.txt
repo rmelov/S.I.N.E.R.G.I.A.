@@ -1,0 +1,311 @@
+/*
+    CATÁLOGO BASE
+
+select * from status_discente
+    EXEC sp_InserirStatusDiscente
+        @DESIGNACAO = 'em busca de projeto',
+        @HIERARQUIA = 100;
+    EXEC sp_InserirStatusDiscente
+        @DESIGNACAO = 'indisponível',
+        @HIERARQUIA = 200;
+
+
+select * from status_projeto
+    EXEC sp_InserirStatusProjeto
+        @DESIGNACAO = 'em busca de discente',
+        @HIERARQUIA = 100;
+    EXEC sp_InserirStatusProjeto
+        @DESIGNACAO = 'em desenvolvimento',
+        @HIERARQUIA = 200;
+    EXEC sp_InserirStatusProjeto
+        @DESIGNACAO = 'finalizado',
+        @HIERARQUIA = 300;
+    EXEC sp_InserirStatusProjeto
+        @DESIGNACAO = 'suspenso',
+        @HIERARQUIA = 400;
+
+
+select * from nivel_habilidade
+    EXEC sp_InserirNivelHabilidade
+        @DESIGNACAO = 'aprendiz',
+        @HIERARQUIA = 100;
+    EXEC sp_InserirNivelHabilidade
+        @DESIGNACAO = 'praticante',
+        @HIERARQUIA = 200;
+    EXEC sp_InserirNivelHabilidade
+        @DESIGNACAO = 'versátil',
+        @HIERARQUIA = 300;
+    EXEC sp_InserirNivelHabilidade
+        @DESIGNACAO = 'especialista',
+        @HIERARQUIA = 400;
+
+
+select * from ordem_autoria
+    EXEC sp_InserirOrdemAutoria
+        @DESIGNACAO = 'autoria principal',
+        @HIERARQUIA = 100;
+    EXEC sp_InserirOrdemAutoria
+        @DESIGNACAO = 'co-autoria',
+        @HIERARQUIA = 200;
+    EXEC sp_InserirOrdemAutoria
+        @DESIGNACAO = 'apoio técnico',
+        @HIERARQUIA = 300;
+    EXEC sp_InserirOrdemAutoria
+        @DESIGNACAO = 'desenvolvimento técnico',
+        @HIERARQUIA = 400;
+
+
+select * from parametro_hierarquia
+    EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'status_discente_inicial',
+	    @DESCRICAO = 'define o status padrão na inserção de discente',
+	    @StatusDiscenteID = 'x';
+    EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'status_projeto_inicial',
+	    @DESCRICAO = 'define o status padrão na inserção de projeto',
+	    @StatusProjetoID = 'y';
+	EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'ordem_autoria_principal',
+	    @DESCRICAO = 'define referência à autoria principal',
+	    @OrdemAutoriaID = 'z';
+    EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'ordem_autoria_coautoria',
+	    @DESCRICAO = 'define referência à co-autoria',
+	    @OrdemAutoriaID = 'a';
+    EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'ordem_autoria_apoio_tecnico',
+	    @DESCRICAO = 'define referência à apoio técnico',
+	    @OrdemAutoriaID = 'a';
+    EXEC sp_InserirParametroHierarquia
+	    @DESIGNACAO = 'ordem_autoria_desenvolvimento',
+	    @DESCRICAO = 'define referência à desenvolvimento',
+	    @OrdemAutoriaID = 'b';
+*/
+
+
+/*
+    CATÁLOGO CURSOS FATEC (CRUZEIRO)
+
+select * from curso
+    EXEC sp_InserirCurso
+        @DESIGNACAO = 'análise e desenvolvimento de sistemas';
+    EXEC sp_InserirCurso
+        @DESIGNACAO = 'gestão de eventos';
+    EXEC sp_InserirCurso
+        @DESIGNACAO = 'gestão de produção industrial';
+    EXEC sp_InserirCurso
+        @DESIGNACAO = 'gestão empresarial';
+    EXEC sp_InserirCurso
+        @DESIGNACAO = 'gestão hospitalar';
+*/
+
+
+/*
+    INSTITUIÇÃO
+
+select * from instituicao
+    EXEC sp_InserirInstituicao
+        @DESIGNACAO = 'faculdade de tecnologia',
+        @ACRONIMO = 'fatec',
+        @MASCARA = '%[^0-9]%',
+        @TAMANHO_MIN = 13,
+        @TAMANHO_MAX = 13;
+  
+
+select * from dominio_instituicao
+    EXEC sp_InserirDominioInstituicao
+        @InstituicaoID = 'x',
+        @SUFIXO = 'fatec.sp.gov.br';
+
+
+select * from curso_instituicao
+    EXEC sp_InserirCursoInstituicao
+        @CursoID = 'c1',
+        @InstituicaoID = 'x';
+    EXEC sp_InserirCursoInstituicao
+        @CursoID = 'c2',
+        @InstituicaoID = 'x';
+    EXEC sp_InserirCursoInstituicao
+        @CursoID = 'c3',
+        @InstituicaoID = 'x';
+    EXEC sp_InserirCursoInstituicao
+        @CursoID = 'c4',
+        @InstituicaoID = 'x';
+    EXEC sp_InserirCursoInstituicao
+        @CursoID = 'c5',
+        @InstituicaoID = 'x';
+*/
+
+
+/*
+    CONTATO
+
+select * from rede
+    EXEC sp_InserirRede
+        @DESIGNACAO = 'Instagram',
+        @DOMINIO = 'instagram.com',
+        @DiscenteCursoInstituicaoID = 'x';
+*/
+
+
+/* 
+    DISCENTE
+
+select * from discente_curso_instituicao
+    EXEC sp_InserirDiscente
+        @CursoInstituicaoID = 'x',
+        @RA = '1234567891012',
+        @DESIGNACAO = 'Sísifo Félix Rocha Caino da Pena',
+        @EMAIL_INSTITUCIONAL = 'sisifo.dapena@fatec.sp.gov.br',
+        @SLUG = 'sisifoda';
+
+
+select * from email_discente
+    EXEC sp_InserirEmailDiscente
+        @DiscenteCursoInstituicaoID = 'x',
+        @EMAIL = 'sisifo@icq.com';
+
+
+select * from telefone_discente
+    EXEC sp_InserirTelefoneDiscente
+        @DiscenteCursoInstituicaoID = 'x',
+        @TELEFONE = '+5511981012345';
+
+
+select * from rede_discente
+    EXEC sp_InserirRedeDiscente
+        @DiscenteCursoInstituicaoID = 'x',
+        @RedeID = 'y',
+        @URL = 'instagram.com/sisifodapena';
+
+
+select * from habilidade
+    EXEC sp_InserirHabilidade
+        @DESIGNACAO = 'Java',
+        @DiscenteCursoInstituicaoID = 'x';
+
+
+select * from discente_habilidade
+    EXEC sp_InserirDiscenteHabilidade
+        @DiscenteCursoInstituicaoID = 'x',
+        @HabilidadeID = 'y',
+        @NivelID = 'z';
+*/
+
+
+/*
+    PROJETO
+
+select * from projeto
+    EXEC sp_InserirProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @DESIGNACAO = 'Sistema Interdisciplinar de Nexos Estratégicos Resultantes do Gerenciamento Interoperável Acadêmico',
+        @DESCRICAO = 'Projeto com o intuito de integrar os cursos da instituição de ensino.',
+        @DATA_INICIO = '',
+        @PRAZO = '',
+        @SLUG = 'sinergia',
+        @EMAIL = '',
+        @CursoRequisitadoID = 'y';
+
+select * from curso_requisitado
+    EXEC sp_InserirCursoRequisitado
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @CursoID = 'z';
+
+select * from habilidade_requisitada
+    EXEC sp_InserirHabilidadeRequisitada
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @HabilidadeID = 'z',
+        @NivelHabilidadeID = 'a';
+
+select * from autoria_projeto
+    EXEC sp_InserirAutoriaProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @DiscenteAutoriaID = 'z',
+        @OrdemAutoriaID = 'a';
+
+select * from telefone_projeto
+    EXEC sp_InserirTelefoneProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @TELEFONE = '+5512981012345';
+
+select * from email_projeto
+    EXEC sp_InserirEmailProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @EMAIL = 'sinergia@contato.com';
+
+select * from rede_projeto
+    EXEC sp_InserirRedeProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @RedeID = 'z',
+        @URL = 'instagram.com/proj.sinergia';
+
+select * from classificacao
+    EXEC sp_InserirClassificacao
+        @DESIGNACAO = 'trabalho de graduação',
+        @DiscenteCursoInstituicaoID = 'x';
+
+select * from area_atuacao
+    EXEC sp_InserirAreaAtuacao
+        @DESIGNACAO = 'interoperabilidade',
+        @DiscenteCursoInstituicaoID = 'x';
+
+select * from classificacao_projeto
+    EXEC sp_InserirClassificacaoProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @ClassificacaoID = 'z';
+
+select * from area_atuacao_projeto
+    EXEC sp_InserirAreaAtuacaoProjeto
+        @DiscenteCursoInstituicaoID = 'x',
+        @ProjetoID = 'y',
+        @AreaAtuacaoID = 'z';
+*/
+
+
+
+/*
+    SELECTS
+
+select * from status_projeto
+select * from status_discente
+select * from projeto
+select * from discente
+select * from instituicao
+select * from curso
+select * from telefone
+select * from dominio_comum
+select * from email
+select * from dominio_instituicao
+select * from email_institucional
+select * from rede
+select * from habilidade
+select * from habilidade_curso
+select * from nivel_habilidade
+select * from classificacao
+select * from area_atuacao
+select * from ordem_autoria
+select * from telefone_projeto
+select * from email_projeto
+select * from rede_projeto
+select * from telefone_discente
+select * from email_discente
+select * from rede_discente
+select * from email_institucional_discente
+select * from curso_instituicao
+select * from discente_curso_instituicao
+select * from discente_habilidade
+select * from curso_requisitado
+select * from habilidade_requisitada
+select * from autoria_projeto
+select * from classificacao_projeto
+select * from area_atuacao_projeto
+select * from parametro_hierarquia
+*/

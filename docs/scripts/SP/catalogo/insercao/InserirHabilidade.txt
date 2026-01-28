@@ -1,0 +1,137 @@
+CREATE PROCEDURE sp_InserirHabilidade
+    @DESIGNACAO NVARCHAR(500),
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    SET @DESIGNACAO = TRIM(@DESIGNACAO);
+
+    EXEC @Validacao = sp_ValidarHabilidade
+        @DESIGNACAO; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+    DECLARE @CursoID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteCursoID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT,
+        @CursoID OUTPUT;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    DECLARE @HabilidadeID UNIQUEIDENTIFIER;
+
+    SELECT
+        @HabilidadeID = ID_HABILIDADE 
+    FROM
+        HABILIDADE 
+    WHERE
+        UPPER(DESIGNACAO_HABILIDADE) = UPPER(@DESIGNACAO);
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    HABILIDADE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_HABILIDADE = @DESIGNACAO
+            )
+            BEGIN
+                IF @HabilidadeID IS NULL
+                BEGIN
+                    INSERT INTO HABILIDADE(
+                        DESIGNACAO_HABILIDADE,
+                        ID_DISCENTE
+                    )
+                    OUTPUT
+                        inserted.ID_HABILIDADE
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @DESIGNACAO,
+                        @DiscenteID
+                    );
+
+                    SELECT
+                        @HabilidadeID = NovoID
+                    FROM
+                        @OutputID;
+                END
+
+                IF NOT EXISTS(
+                    SELECT
+                        1
+                    FROM
+                        HABILIDADE_CURSO
+                    WHERE
+                        ID_HABILIDADE = @HabilidadeID
+                    AND
+                        ID_CURSO = @CursoID
+                )
+                BEGIN
+                    INSERT INTO HABILIDADE_CURSO(
+                        ID_HABILIDADE,
+                        ID_CURSO
+                    )
+                    VALUES(
+                        @HabilidadeID,
+                        @CursoID
+                    );
+                END
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_HABILIDADE
+                FROM
+                    HABILIDADE
+                WHERE
+                    DESIGNACAO_HABILIDADE = @DESIGNACAO;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirHabilidade
+    @DESIGNACAO = 'Java',
+    @DiscenteCursoInstituicaoID = 'x';
+*/

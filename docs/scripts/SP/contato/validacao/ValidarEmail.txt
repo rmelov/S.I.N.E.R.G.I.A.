@@ -1,0 +1,53 @@
+CREATE PROCEDURE sp_ValidarEmail
+    @EMAIL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @EMAIL IS NULL OR LEN(TRIM(@EMAIL)) = 0
+    BEGIN
+        RAISERROR('O e-mail não pode estar vazio.', 16, 1);
+        RETURN 1;
+    END
+
+    IF CHARINDEX('@', @EMAIL) <= 1
+    BEGIN
+        RAISERROR(
+            'Formato de e-mail inválido.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@EMAIL)) > 255
+    BEGIN
+        RAISERROR('Este e-mail excede o limite de caracteres.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @EMAIL NOT LIKE '%_@%_._%'
+    BEGIN
+        RAISERROR(
+            'Formato de e-mail inválido.',
+                16, 
+                1
+            );
+        RETURN 1;
+    END
+
+    IF @EMAIL LIKE '% %' OR @EMAIL LIKE '%@%@%' OR @EMAIL LIKE '%[^a-zA-Z0-9.@_-]%'
+    BEGIN
+        RAISERROR(
+            'O e-mail contém caracteres inválidos ou espaços.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

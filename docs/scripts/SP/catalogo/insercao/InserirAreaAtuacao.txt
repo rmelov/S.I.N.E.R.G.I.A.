@@ -1,0 +1,97 @@
+CREATE PROCEDURE sp_InserirAreaAtuacao
+    @DESIGNACAO NVARCHAR(500),
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    EXEC @Validacao = sp_ValidarAreaAtuacao
+        @DESIGNACAO;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+        BEGIN TRANSACTION;             
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    AREA_ATUACAO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_AREA_ATUACAO = @DESIGNACAO
+            )
+            BEGIN
+                INSERT INTO AREA_ATUACAO(
+                    DESIGNACAO_AREA_ATUACAO,
+                    ID_DISCENTE
+                )
+                OUTPUT
+                    inserted.ID_AREA_ATUACAO
+                INTO
+                    @OutputID
+                VALUES(
+                    @DESIGNACAO,
+                    @DiscenteID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_AREA_ATUACAO 
+                FROM
+                    AREA_ATUACAO 
+                WHERE
+                    DESIGNACAO_AREA_ATUACAO = @DESIGNACAO;
+            END
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirAreaAtuacao
+    @DESIGNACAO = 'interoperabilidade',
+    @DiscenteCursoInstituicaoID = 'x';
+*/

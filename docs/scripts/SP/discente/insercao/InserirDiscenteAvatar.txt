@@ -1,0 +1,118 @@
+CREATE PROCEDURE sp_InserirDiscenteAvatar
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @AvatarID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+
+    IF @Validacao <> 0 RETURN;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            AVATAR
+        WHERE
+            ID_AVATAR = @AvatarID
+    )
+    BEGIN
+        RAISERROR(
+            'Avatar não encontrado.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_AVATAR = @AvatarID
+            )
+            BEGIN
+                UPDATE
+                    DISCENTE
+                SET
+                    ID_AVATAR = @AvatarID 
+                WHERE
+                    ID_DISCENTE = @DiscenteID;
+                -- como uso o outputid nesse caso?
+
+                IF @AvatarAntigoID IS NOT NULL
+                AND @AvatarAntigoID <> @AvatarID
+                BEGIN
+                    DELETE FROM
+                        AVATAR
+                    WHERE
+                        ID_AVATAR = @AvatarAntigoID;
+                END
+                -- é melhor manter o histórico?
+                -- o que seria deletar via Job?
+                -- então nao precisa ter chamada para sp de inserção de avatar?
+                -- considere que penso em ter avatares "padroes", assim como temos no discord, por exemplo, que sao desenhos e etc
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    ID_AVATAR
+                FROM
+                    DISCENTE
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_AVATAR = @AvatarID;
+            END
+            
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirDiscenteAvatar
+    @DiscenteCursoInstituicaoID = 'x',
+    @AvatarID = 'y';
+*/

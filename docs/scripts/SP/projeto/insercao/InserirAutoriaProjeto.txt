@@ -1,0 +1,111 @@
+CREATE PROCEDURE sp_InserirAutoriaProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @DiscenteAutoriaID UNIQUEIDENTIFIER,
+    @OrdemAutoriaID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;    
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteAutoriaID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    EXEC @Validacao = sp_ValidarAutoriaProjeto
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @DiscenteAutoriaID,
+        @OrdemAutoriaID;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    AUTORIA_PROJETO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteAutoriaID
+                AND
+                    ID_ORDEM_AUTORIA = @OrdemAutoriaID
+            )
+            BEGIN
+                INSERT INTO
+                    AUTORIA_PROJETO(
+                        ID_PROJETO,
+                        ID_DISCENTE_CURSO_INSTITUICAO,
+                        ID_ORDEM_AUTORIA
+                    )
+                    OUTPUT 
+                        inserted.ID_AUTORIA_PROJETO
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @ProjetoID,
+                        @DiscenteAutoriaID,
+                        @OrdemAutoriaID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_AUTORIA_PROJETO
+                FROM
+                    AUTORIA_PROJETO
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteAutoriaID
+                AND
+                    ID_ORDEM_AUTORIA = @OrdemAutoriaID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirAutoriaProjeto
+    @DiscenteCursoInstituicaoID = 'x',
+    @ProjetoID = 'y',
+    @DiscenteAutoriaID = 'z',
+    @OrdemAutoriaID = 'a';
+*/

@@ -1,0 +1,41 @@
+CREATE PROCEDURE sp_ValidarOrdemAutoria
+    @DESIGNACAO NVARCHAR(500),
+    @HIERARQUIA INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @DESIGNACAO IS NULL
+    OR LEN(TRIM(@DESIGNACAO)) = 0
+    BEGIN
+        RAISERROR(
+            'A designação não pode ser nula ou vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@DESIGNACAO)) > 255
+    BEGIN
+        RAISERROR(
+            'Caracteres excedidos.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @HIERARQUIA IS NULL
+    OR @HIERARQUIA <= 0
+    BEGIN
+        RAISERROR(
+            'A hierarquia não pode ser nula ou vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

@@ -1,0 +1,70 @@
+CREATE PROCEDURE sp_ValidarEmailInstitucional
+    @CursoInstituicaoID UNIQUEIDENTIFIER,
+    @EMAIL_INSTITUCIONAL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+        IF EXISTS(
+        SELECT 
+            1
+        FROM
+            EMAIL_INSTITUCIONAL
+        WHERE
+            ENDERECO_EMAIL_INSTITUCIONAL = @EMAIL_INSTITUCIONAL
+    )
+    BEGIN
+        RAISERROR(
+            'E-mail institucional já cadastrado.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            DOMINIO_INSTITUICAO 
+        WHERE
+            @EMAIL_INSTITUCIONAL
+        LIKE
+            '%' + SUFIXO_DOMINIO
+    )
+    BEGIN
+        RAISERROR(
+            'O domínio deste e-mail (ainda) não é autorizado.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    DECLARE @InstituicaoID UNIQUEIDENTIFIER;
+
+    SELECT
+        @InstituicaoID = ID_INSTITUICAO
+    FROM
+        CURSO_INSTITUICAO
+    WHERE
+        ID_CURSO_INSTITUICAO = @CursoInstituicaoID;
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            DOMINIO_INSTITUICAO
+        WHERE
+            ID_INSTITUICAO = @InstituicaoID
+    )
+    BEGIN
+        RAISERROR(
+            'O domínio deste e-mail não existe na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

@@ -1,0 +1,35 @@
+CREATE PROCEDURE sp_ValidarProjetoPermissaoTecnica
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @AutoriaPrincipalID UNIQUEIDENTIFIER,
+    @CoAutoriaID UNIQUEIDENTIFIER,
+    @ApoioTecnicoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            AUTORIA_PROJETO
+        WHERE
+            ID_PROJETO = @ProjetoID
+        AND
+            ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID
+        AND
+            ID_ORDEM_AUTORIA
+        IN
+            (@AutoriaPrincipalID, @CoAutoriaID, @ApoioTecnicoID)
+    )
+    BEGIN
+        RAISERROR(
+            'Projeto não encontrado ou você não tem permissão para editá-lo.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

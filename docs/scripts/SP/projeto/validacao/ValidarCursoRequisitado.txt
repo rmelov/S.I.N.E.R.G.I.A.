@@ -1,0 +1,61 @@
+CREATE PROCEDURE sp_ValidarCursoRequisitado
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @CursoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ProjetoID IS NULL
+    OR @CursoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Identificação de projeto e curso é obrigatória.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @OrdensAutoria INT;
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+
+    EXEC @OrdensAutoria = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT;
+
+    IF @OrdensAutoria <> 0 RETURN 1;
+
+
+    DECLARE @Permissao INT;
+
+    EXEC @Permissao = sp_ValidarProjetoPermissaoGestao
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID;
+
+    IF @Permissao <> 0 RETURN 1;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            CURSO
+        WHERE
+            ID_CURSO = @CursoID        
+    )
+    BEGIN
+        RAISERROR(
+            'Curso não encontrado na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

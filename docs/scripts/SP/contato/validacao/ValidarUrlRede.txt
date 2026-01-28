@@ -1,0 +1,68 @@
+CREATE PROCEDURE sp_ValidarUrlRede
+    @RedeID UNIQUEIDENTIFIER,
+    @URL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @DominioRede VARCHAR(255);
+
+    SELECT
+        @DominioRede = NOME_DOMINIO_REDE
+    FROM
+        REDE
+    WHERE
+        ID_REDE = @RedeID;    
+
+    IF @RedeID IS NULL
+    BEGIN
+        RAISERROR(
+            'Rede não encontrada.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @URL IS NULL OR LEN(TRIM(@URL)) = 0
+    BEGIN
+        RAISERROR(
+            'A URL da rede não pode estar vazia.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF LEN(TRIM(@URL)) > 255
+    BEGIN
+        RAISERROR(
+            'Caracteres excedidos para URL.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @URL LIKE '% %' OR @URL LIKE '%[^a-zA-Z0-9._:/-]%'
+    BEGIN
+        RAISERROR(
+            'A URL contém caracteres inválidos ou espaços.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF @URL NOT LIKE '%' + @DominioRede + '%'
+    BEGIN
+        RAISERROR(
+            'A URL inserida não corresponde ao domínio da rede selecionada.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

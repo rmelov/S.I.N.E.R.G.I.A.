@@ -1,0 +1,64 @@
+CREATE PROCEDURE sp_ValidarClassificacaoProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @ClassificacaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ProjetoID IS NULL
+    OR @ClassificacaoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Identificação de projeto e classificação é obrigatória.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+
+    DECLARE @OrdensAutoria INT;
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+    DECLARE @ApoioTecnicoID UNIQUEIDENTIFIER;
+
+    EXEC @OrdensAutoria = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT,
+        @ApoioTecnicoID = @ApoioTecnicoID OUTPUT;
+
+    IF @OrdensAutoria <> 0 RETURN 1;
+
+
+    DECLARE @Permissao INT;
+
+    EXEC @Permissao = sp_ValidarProjetoPermissaoTecnica
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID,
+        @ApoioTecnicoID;
+
+    IF @Permissao <> 0 RETURN 1;
+
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            CLASSIFICACAO
+        WHERE
+            ID_CLASSIFICACAO = @ClassificacaoID
+    )
+    BEGIN
+        RAISERROR(
+            'Classificação não encontrada na base de dados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+      
+    RETURN 0;
+END;

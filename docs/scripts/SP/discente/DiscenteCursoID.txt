@@ -1,0 +1,33 @@
+CREATE PROCEDURE sp_DiscenteCursoID
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @DiscenteID UNIQUEIDENTIFIER OUTPUT,
+    @CursoDiscenteID UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT
+        @DiscenteID = DCI.ID_DISCENTE,
+        @CursoDiscenteID = CI.ID_CURSO
+    FROM
+        DISCENTE_CURSO_INSTITUICAO DCI
+    JOIN
+        CURSO_INSTITUICAO CI
+    ON
+        DCI.ID_CURSO_INSTITUICAO = CI.ID_CURSO_INSTITUICAO
+    WHERE
+        DCI.ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID;
+
+    IF @DiscenteID = NULL
+    OR @CursoDiscenteID = NULL
+    BEGIN
+        RAISERROR(
+            'Discente e/ou vínculo com curso e instituição não encontrados.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

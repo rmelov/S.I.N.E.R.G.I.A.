@@ -1,0 +1,129 @@
+CREATE PROCEDURE sp_InserirDiscenteHabilidade
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @HabilidadeID UNIQUEIDENTIFIER,
+    @NivelID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+    DECLARE @DiscenteCursoID UNIQUEIDENTIFIER;
+
+    EXEC sp_DiscenteCursoID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT,
+        @DiscenteCursoID OUTPUT;
+
+
+    EXEC @Validacao = sp_ValidarHabilidade_Nivel
+        @HabilidadeID,
+        @NivelID;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    DISCENTE_HABILIDADE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_HABILIDADE = @HabilidadeID
+            )
+            BEGIN
+                INSERT INTO DISCENTE_HABILIDADE(
+                    ID_DISCENTE,
+                    ID_HABILIDADE,
+                    ID_NIVEL_HABILIDADE
+                )
+                OUTPUT 
+                    inserted.ID_DISCENTE_HABILIDADE
+                INTO
+                    @OutputID
+                VALUES(
+                    @DiscenteID,
+                    @HabilidadeID,
+                    @NivelID
+                );
+            END
+
+            ELSE
+            BEGIN
+                UPDATE
+                    DISCENTE_HABILIDADE
+                SET
+                    ID_NIVEL_HABILIDADE = @NivelID
+                OUTPUT 
+                    inserted.ID_DISCENTE_HABILIDADE
+                INTO
+                    @OutputID
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_HABILIDADE = @HabilidadeID
+                AND
+                    ID_NIVEL_HABILIDADE <> @NivelID;
+            END
+
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    @OutputID
+            )
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_DISCENTE_HABILIDADE
+                FROM
+                    DISCENTE_HABILIDADE
+                WHERE
+                    ID_DISCENTE = @DiscenteID 
+                AND
+                    ID_HABILIDADE = @HabilidadeID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirDiscenteHabilidade
+    @DiscenteCursoInstituicaoID = 'x',
+    @HabilidadeID = 'y',
+    @NivelID = 'z';
+*/

@@ -1,0 +1,299 @@
+CREATE PROCEDURE sp_InserirProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @DESIGNACAO NVARCHAR(500),
+    @DESCRICAO NVARCHAR(4000),
+    @DATA_INICIO DATE,
+    @PRAZO DATE,
+    @SLUG VARCHAR(100),
+    @EMAIL VARCHAR(500),
+    @CursoRequisitadoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    SET @SLUG = LOWER(TRIM(@SLUG));
+    
+
+    DECLARE @SLUG_CHECADO VARCHAR(42);
+
+    IF @DATA_INICIO IS NULL
+    OR @DATA_INICIO <= '1900-01-01'
+    BEGIN
+        SET @DATA_INICIO = GETDATE();
+    END
+
+    IF @PRAZO <= '1900-01-01'
+    BEGIN
+        SET @PRAZO = NULL
+    END
+
+    EXEC @Validacao = sp_ValidarProjeto
+        @DESIGNACAO,
+        @DESCRICAO,
+        @DATA_INICIO,
+        @PRAZO,
+        @SLUG,
+        @SLUG_CHECADO OUTPUT;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    IF @CursoRequisitadoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Selecione um curso requisitado pelo projeto.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @NovoProjetoID UNIQUEIDENTIFIER;
+    DECLARE @NovoEmailID UNIQUEIDENTIFIER;
+    DECLARE @StatusID UNIQUEIDENTIFIER;
+    DECLARE @AutoriaID UNIQUEIDENTIFIER;
+    
+    IF @EMAIL IS NULL
+    OR LEN(TRIM(@EMAIL)) = 0
+    BEGIN
+        DECLARE @InstituicaoID UNIQUEIDENTIFIER;
+        DECLARE @DominioID UNIQUEIDENTIFIER;
+
+        SELECT 
+            @InstituicaoID = CI.ID_INSTITUICAO
+        FROM 
+            DISCENTE_CURSO_INSTITUICAO DCI
+        INNER JOIN 
+            CURSO_INSTITUICAO CI
+        ON
+            DCI.ID_CURSO_INSTITUICAO = CI.ID_CURSO_INSTITUICAO
+        WHERE 
+            DCI.ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID;
+
+        SELECT
+            TOP 1 @DominioID = ID_DOMINIO_INSTITUICAO 
+        FROM
+            DOMINIO_INSTITUICAO 
+        WHERE
+            ID_INSTITUICAO = @InstituicaoID;
+
+        SELECT
+            TOP 1 @NovoEmailID = EI.ID_EMAIL_INSTITUCIONAL
+        FROM
+            EMAIL_INSTITUCIONAL EI
+        INNER JOIN
+            EMAIL_INSTITUCIONAL_DISCENTE EID
+        ON
+            EID.ID_EMAIL_INSTITUCIONAL = EI.ID_EMAIL_INSTITUCIONAL
+        WHERE
+            EID.ID_DISCENTE = @DiscenteID
+        AND
+            EI.ID_DOMINIO_INSTITUICAO = @DominioID
+
+        IF @NovoEmailID IS NULL
+        BEGIN
+            RAISERROR(
+                'Email institucional não encontrado.',
+                16,
+                1
+            );
+            RETURN;
+        END
+    END
+
+    ELSE
+    BEGIN
+        EXEC @Validacao = sp_ValidarEmail
+            @EMAIL;
+        
+        IF @Validacao <> 0 RETURN @Validacao;
+    END
+
+
+    SELECT 
+        @StatusID = MAX(ID_STATUS_PROJETO),
+        @AutoriaID = MAX(ID_ORDEM_AUTORIA)
+    FROM 
+        PARAMETRO_HIERARQUIA
+    WHERE 
+        DESIGNACAO_PARAMETRO
+    IN(
+        'STATUS_PROJETO_INICIAL',
+        'ORDEM_AUTORIA_PRINCIPAL'
+    );
+
+    IF @StatusID IS NULL
+    OR @AutoriaID IS NULL
+    BEGIN
+        RAISERROR(
+            'Status de projeto e/ou ordem de autoria principal não configurada(s) na base de dados.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+        
+        BEGIN TRANSACTION    
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    PROJETO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_PROJETO = @DESIGNACAO
+                AND
+                    ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID
+            )
+            BEGIN
+                INSERT INTO
+                    PROJETO(
+                        DESIGNACAO_PROJETO,
+                        DESCRICAO_PROJETO,
+                        DATA_INICIO,
+                        PRAZO_CONCLUSAO,
+                        SLUG_PROJETO,
+                        ID_STATUS_PROJETO,
+                        ID_DISCENTE_CURSO_INSTITUICAO
+                    )
+                    OUTPUT
+                        inserted.ID_PROJETO
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @DESIGNACAO,
+                        @DESCRICAO,
+                        @DATA_INICIO,
+                        @PRAZO,
+                        @SLUG_CHECADO,
+                        @StatusID,
+                        @DiscenteCursoInstituicaoID
+                );
+
+                SELECT
+                    @NovoProjetoID = NovoID
+                FROM
+                    @OutputID;            
+
+
+                INSERT INTO
+                    CURSO_REQUISITADO(
+                        ID_PROJETO,
+                        ID_CURSO
+                    )
+                    VALUES(
+                        @NovoProjetoID,
+                        @CursoRequisitadoID
+                );
+
+                IF @EMAIL IS NULL OR LEN(TRIM(@EMAIL)) = 0
+                BEGIN              
+                    INSERT INTO
+                        EMAIL_PROJETO(
+                            ID_PROJETO,
+                            ID_EMAIL_INSTITUCIONAL
+                        )
+                        VALUES(
+                            @NovoProjetoID,
+                            @NovoEmailID
+                    );
+                END
+
+                ELSE
+                BEGIN
+                    EXEC sp_InserirEmail
+                        @EMAIL,
+                        @EMAIL_ID = @NovoEmailID OUTPUT;
+                    
+                    INSERT INTO
+                        EMAIL_PROJETO(
+                            ID_PROJETO,
+                            ID_EMAIL
+                        )
+                        VALUES(
+                            @NovoProjetoID,
+                            @NovoEmailID
+                    );
+                END
+
+                INSERT INTO
+                    AUTORIA_PROJETO(
+                        ID_PROJETO,
+                        ID_DISCENTE_CURSO_INSTITUICAO,
+                        ID_ORDEM_AUTORIA
+                    )
+                    VALUES(
+                        @NovoProjetoID,
+                        @DiscenteCursoInstituicaoID,
+                        @AutoriaID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_PROJETO
+                FROM
+                    PROJETO
+                WHERE
+                    ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID
+                AND
+                    DESIGNACAO_PROJETO = @DESIGNACAO;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirProjeto
+    @DiscenteCursoInstituicaoID = 'x',
+    @DESIGNACAO = 'Sistema Interdisciplinar de Nexos Estratégicos Resultantes do Gerenciamento Interoperável Acadêmico',
+    @DESCRICAO = 'Projeto com o intuito de integrar os cursos da instituição de ensino.',
+    @DATA_INICIO = '',
+    @PRAZO = '',
+    @SLUG = 'sinergia',
+    @EMAIL = '',
+    @CursoRequisitadoID = 'y'
+*/

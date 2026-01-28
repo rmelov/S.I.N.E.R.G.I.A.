@@ -1,0 +1,95 @@
+CREATE PROCEDURE sp_InserirAreaAtuacaoProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @AreaAtuacaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    EXEC @Validacao = sp_ValidarAreaAtuacaoProjeto
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AreaAtuacaoID;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    AREA_ATUACAO_PROJETO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_AREA_ATUACAO = @AreaAtuacaoID
+            )
+            BEGIN
+                INSERT INTO
+                    AREA_ATUACAO_PROJETO(
+                        ID_PROJETO,
+                        ID_AREA_ATUACAO
+                    )
+                    OUTPUT 
+                        inserted.ID_AREA_ATUACAO_PROJETO
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @ProjetoID,
+                        @AreaAtuacaoID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    ID_AREA_ATUACAO_PROJETO
+                FROM
+                    AREA_ATUACAO_PROJETO
+                WHERE
+                    ID_PROJETO = @ProjetoID
+                AND
+                    ID_AREA_ATUACAO = @AreaAtuacaoID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirAreaAtuacaoProjeto
+    @DiscenteCursoInstituicaoID = 'x',
+    @ProjetoID = 'y',
+    @AreaAtuacaoID = 'z';
+*/

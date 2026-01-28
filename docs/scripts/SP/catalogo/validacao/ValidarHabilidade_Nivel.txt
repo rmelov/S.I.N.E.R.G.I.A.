@@ -1,0 +1,52 @@
+CREATE PROCEDURE sp_ValidarHabilidade_Nivel
+    @HabilidadeID UNIQUEIDENTIFIER,
+    @NivelID UNIQUEIDENTIFIER
+AS
+BEGIN
+    IF @HabilidadeID IS NULL
+    OR @NivelID IS NULL
+    BEGIN
+        RAISERROR(
+            'Escolha a habilidade e seu respectivo nível.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            HABILIDADE
+        WHERE
+            ID_HABILIDADE = @HabilidadeID
+    )
+    BEGIN
+        RAISERROR(
+            'Habilidade não encontrada para este curso.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            NIVEL_HABILIDADE
+        WHERE
+            ID_NIVEL_HABILIDADE = @NivelID
+    )
+    BEGIN
+        RAISERROR(
+            'Nível de habilidade não encontrado no catálogo.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

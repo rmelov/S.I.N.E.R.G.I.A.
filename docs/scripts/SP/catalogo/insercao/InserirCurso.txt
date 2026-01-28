@@ -1,0 +1,78 @@
+CREATE PROCEDURE sp_InserirCurso
+    @DESIGNACAO NVARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarCurso
+        @DESIGNACAO;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+                NovoID UNIQUEIDENTIFIER
+        );
+        
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    CURSO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_CURSO = @DESIGNACAO
+            )
+            BEGIN
+                INSERT INTO CURSO(
+                    DESIGNACAO_CURSO
+                )
+                OUTPUT
+                    inserted.ID_CURSO
+                INTO
+                    @OutputID
+                VALUES(
+                    @DESIGNACAO
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_CURSO
+                FROM
+                    CURSO
+                WHERE
+                    DESIGNACAO_CURSO = @DESIGNACAO;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirCurso
+    @DESIGNACAO = 'nome do curso';
+*/

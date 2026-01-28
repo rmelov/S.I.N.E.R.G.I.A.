@@ -1,0 +1,136 @@
+CREATE PROCEDURE sp_InserirRedeDiscente
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @RedeID UNIQUEIDENTIFIER,
+    @URL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    
+    SET @URL = LOWER(TRIM(@URL));
+    
+
+    EXEC @Validacao = sp_ValidarUrlRede
+        @RedeID,
+        @URL;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    IF EXISTS(
+        SELECT
+            1
+        FROM
+            REDE_DISCENTE
+        WHERE
+            ID_REDE = @RedeID
+        AND
+            URL_REDE = @URL
+        AND
+            ID_DISCENTE <> @DiscenteID
+    )
+    BEGIN
+        RAISERROR(
+            'Impossível vincular você à rede de outra pessoa.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    REDE_DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_REDE = @RedeID
+                AND
+                    URL_REDE = @URL
+            )
+            BEGIN
+                INSERT INTO REDE_DISCENTE(
+                    ID_DISCENTE,
+                    ID_REDE,
+                    URL_REDE
+                )
+                OUTPUT 
+                    inserted.ID_REDE_DISCENTE
+                INTO
+                    @OutputID
+                VALUES(
+                    @DiscenteID,
+                    @RedeID,
+                    @URL
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_REDE_DISCENTE
+                FROM
+                    REDE_DISCENTE
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_REDE = @RedeID
+                AND
+                    URL_REDE = @URL
+            END
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirRedeDiscente
+    @DiscenteCursoInstituicaoID = 'x',
+    @RedeID = 'y',
+    @URL = 'instagram.com/sisifodapena'
+*/

@@ -1,0 +1,108 @@
+CREATE PROCEDURE sp_InserirDominioInstituicao
+    @InstituicaoID UNIQUEIDENTIFIER,
+    @SUFIXO VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF @InstituicaoID IS NULL
+    OR @SUFIXO IS NULL
+    OR LEN(TRIM(@SUFIXO)) = 0
+    OR LEN(TRIM(@SUFIXO)) > 100
+    OR NOT EXISTS(
+        SELECT 1
+        FROM INSTITUICAO
+        WHERE ID_INSTITUICAO = @InstituicaoID
+    )
+    BEGIN
+        RAISERROR(
+            'Informe uma instituição válida e seu respectivo sufixo do domínio de e-mail; respeitando os limites de caracteres.',
+            16,
+            1
+        );
+        RETURN;
+    END
+
+    SET @SUFIXO = LOWER(TRIM(@SUFIXO));
+    SET @SUFIXO = REPLACE(@SUFIXO, '@', '');
+    SET @SUFIXO = '@' + @SUFIXO;
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDominioInstituicao
+        @SUFIXO;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    DOMINIO_INSTITUICAO
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_INSTITUICAO = @InstituicaoID
+                AND
+                    SUFIXO_DOMINIO = @SUFIXO
+            )
+            BEGIN
+                INSERT INTO DOMINIO_INSTITUICAO(
+                    SUFIXO_DOMINIO,
+                    ID_INSTITUICAO
+                )
+                OUTPUT
+                    inserted.ID_DOMINIO_INSTITUICAO
+                INTO
+                    @OutputID
+                VALUES(
+                    @SUFIXO,
+                    @InstituicaoID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_DOMINIO_INSTITUICAO
+                FROM
+                    DOMINIO_INSTITUICAO
+                WHERE
+                    ID_INSTITUICAO = @InstituicaoID
+                AND
+                    SUFIXO_DOMINIO = @SUFIXO;
+            END
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+            
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+
+END;
+
+/*
+EXEC sp_InserirDominioInstituicao
+    @InstituicaoID = '1',
+    @SUFIXO = 'fatec.sp.gov.br';
+*/

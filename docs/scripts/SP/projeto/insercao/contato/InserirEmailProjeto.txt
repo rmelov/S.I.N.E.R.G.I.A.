@@ -1,0 +1,198 @@
+CREATE PROCEDURE sp_InserirEmailProjeto
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @ProjetoID UNIQUEIDENTIFIER,
+    @EMAIL VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN;
+
+    DECLARE @AutoriaPrincipalID UNIQUEIDENTIFIER;
+    DECLARE @CoAutoriaID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_OrdensAutoriaID
+        @AutoriaPrincipalID = @AutoriaPrincipalID OUTPUT,
+        @CoAutoriaID = @CoAutoriaID OUTPUT;
+
+    IF @Validacao <> 0 RETURN;
+
+    EXEC @Validacao = sp_ValidarProjetoPermissaoGestao
+        @DiscenteCursoInstituicaoID,
+        @ProjetoID,
+        @AutoriaPrincipalID,
+        @CoAutoriaID;
+
+    IF @Validacao <> 0 RETURN;
+
+
+    SET @EMAIL = LOWER(TRIM(@EMAIL));
+
+    EXEC @Validacao = sp_ValidarEmail
+        @EMAIL;
+
+    IF @Validacao <> 0 RETURN;
+
+
+    DECLARE @NovoEmailID UNIQUEIDENTIFIER;
+    DECLARE @EmailInstitucionalID UNIQUEIDENTIFIER;
+    DECLARE @EmailID UNIQUEIDENTIFIER;
+    DECLARE @EmailDiscenteID UNIQUEIDENTIFIER;
+
+    SELECT
+        @EmailInstitucionalID = ID_EMAIL_INSTITUCIONAL
+    FROM
+        EMAIL_INSTITUCIONAL
+    WHERE
+        ENDERECO_EMAIL_INSTITUCIONAL = @EMAIL;
+
+    SELECT
+        @EmailID = E.ID_EMAIL,
+        @EmailDiscenteID = ED.ID_EMAIL
+    FROM
+        EMAIL E
+    LEFT JOIN
+        EMAIL_DISCENTE ED
+    ON
+        ED.ID_EMAIL = E.ID_EMAIL
+    WHERE
+        E.ENDERECO_EMAIL = @EMAIL;
+
+    IF @EmailInstitucionalID IS NOT NULL
+    OR @EmailDiscenteID IS NOT NULL
+    BEGIN
+        IF NOT EXISTS(
+            SELECT 
+                1
+            FROM
+                AUTORIA_PROJETO AP
+            INNER JOIN
+                DISCENTE_CURSO_INSTITUICAO DCI
+            ON
+                AP.ID_DISCENTE_CURSO_INSTITUICAO = DCI.ID_DISCENTE_CURSO_INSTITUICAO
+            LEFT JOIN
+                EMAIL_INSTITUCIONAL_DISCENTE EID
+            ON
+                EID.ID_DISCENTE = DCI.ID_DISCENTE
+            LEFT JOIN
+                EMAIL_DISCENTE ED
+            ON
+                ED.ID_DISCENTE = DCI.ID_DISCENTE
+            WHERE
+                AP.ID_PROJETO = @ProjetoID
+            AND(
+                    EID.ID_EMAIL_INSTITUCIONAL = @EmailInstitucionalID
+                OR
+                    ED.ID_EMAIL = @EmailID
+            )
+        )
+        BEGIN
+            RAISERROR(
+                'Não foi possível vincular este e-mail, pois não é de ninguém parte deste projeto.', 
+                16, 
+                1
+            );
+            RETURN;
+        END
+    END
+
+    BEGIN TRY
+        BEGIN TRANSACTION
+            IF @EmailInstitucionalID IS NOT NULL
+            BEGIN
+                IF NOT EXISTS(
+                    SELECT
+                        1
+                    FROM
+                        EMAIL_PROJETO 
+                    WHERE
+                        ID_PROJETO = @ProjetoID
+                    AND
+                        ID_EMAIL_INSTITUCIONAL = @EmailInstitucionalID
+                )
+                BEGIN
+                    INSERT INTO
+                        EMAIL_PROJETO(
+                            ID_EMAIL_INSTITUCIONAL,
+                            ID_PROJETO
+                    )
+                    VALUES(
+                        @EmailInstitucionalID,
+                        @ProjetoID
+                    );
+                END
+            END
+
+            ELSE
+            BEGIN
+                IF @EmailID IS NOT NULL
+                    SET @NovoEmailID = @EmailID;
+                ELSE
+                    EXEC sp_InserirEmail 
+                        @EMAIL = @EMAIL, 
+                        @EMAIL_ID = @NovoEmailID OUTPUT;           
+
+                IF NOT EXISTS(
+                    SELECT
+                        1
+                    FROM
+                        EMAIL_PROJETO 
+                    WHERE
+                        ID_PROJETO = @ProjetoID
+                    AND
+                        ID_EMAIL = @NovoEmailID
+                )
+                BEGIN
+                    INSERT INTO
+                        EMAIL_PROJETO(
+                            ID_EMAIL,
+                            ID_PROJETO
+                    )
+                    VALUES(
+                        @NovoEmailID,
+                        @ProjetoID
+                    );
+                END
+            END
+        COMMIT TRANSACTION;
+
+        SELECT 
+            ID_EMAIL_PROJETO 
+        FROM 
+            EMAIL_PROJETO 
+        WHERE 
+            ID_PROJETO = @ProjetoID 
+        AND(
+            (
+                    @EmailInstitucionalID IS NOT NULL
+                AND 
+                    ID_EMAIL_INSTITUCIONAL = @EmailInstitucionalID
+            )
+            OR 
+            (
+                    @NovoEmailID IS NOT NULL
+                AND
+                    ID_EMAIL = @NovoEmailID
+            )
+        );
+    END TRY
+
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirEmailProjeto
+    @DiscenteCursoInstituicaoID = 'x',
+    @ProjetoID = 'y'
+    @EMAIL = 'sinergia@contato.com';
+*/

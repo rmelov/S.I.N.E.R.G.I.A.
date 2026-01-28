@@ -1,0 +1,64 @@
+CREATE PROCEDURE sp_InserirTelefone
+    @TELEFONE VARCHAR(50),
+    @TELEFONE_ID UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @TELEFONE = TRIM(@TELEFONE);
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT
+                    1 
+                FROM
+                    TELEFONE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    NUMERO_TELEFONE = @TELEFONE
+            )
+            BEGIN
+                INSERT INTO TELEFONE(
+                    NUMERO_TELEFONE
+                )
+                OUTPUT
+                    inserted.ID_TELEFONE
+                INTO
+                    @OutputID
+                VALUES(
+                    @TELEFONE
+                );
+
+                SELECT
+                    @TELEFONE_ID = NovoID
+                FROM
+                    @OutputID;
+            END
+
+            ELSE
+            BEGIN
+                SELECT
+                    @TELEFONE_ID = ID_TELEFONE 
+                FROM
+                    TELEFONE 
+                WHERE
+                    NUMERO_TELEFONE = @TELEFONE;
+            END
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;

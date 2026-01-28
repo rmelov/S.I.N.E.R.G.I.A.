@@ -1,0 +1,134 @@
+CREATE PROCEDURE sp_InserirTelefoneDiscente
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER,
+    @TELEFONE VARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarDiscenteCursoInstituicao
+        @DiscenteCursoInstituicaoID; 
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    SET @TELEFONE = TRIM(@TELEFONE);
+
+
+    EXEC @Validacao = sp_ValidarTelefone
+        @TELEFONE;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+
+    DECLARE @DiscenteID UNIQUEIDENTIFIER;
+
+    EXEC @Validacao = sp_DiscenteID
+        @DiscenteCursoInstituicaoID,
+        @DiscenteID OUTPUT;
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    DECLARE @NovoTelefoneID UNIQUEIDENTIFIER;
+
+
+    IF EXISTS(
+        SELECT
+            1
+        FROM
+            TELEFONE_DISCENTE TD
+        INNER JOIN
+            TELEFONE T
+        ON
+            T.ID_TELEFONE = TD.ID_TELEFONE
+        WHERE
+            T.NUMERO_TELEFONE = @TELEFONE
+        AND
+            TD.ID_DISCENTE <> @DiscenteID
+    )
+    BEGIN
+        RAISERROR(
+            'Impossível vincular você ao telefone de outra pessoa.',
+            16,
+            1
+        );
+        RETURN;
+    END
+    
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION
+            EXEC sp_InserirTelefone
+                @TELEFONE = @TELEFONE,
+                @TELEFONE_ID = @NovoTelefoneID OUTPUT;
+
+            IF NOT EXISTS(
+                SELECT
+                    1
+                FROM
+                    TELEFONE_DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_TELEFONE = @NovoTelefoneID
+            )
+            BEGIN
+                INSERT INTO TELEFONE_DISCENTE(
+                    ID_TELEFONE,
+                    ID_DISCENTE
+                )
+                OUTPUT 
+                    inserted.ID_TELEFONE_DISCENTE
+                INTO
+                    @OutputID
+                VALUES(
+                    @NovoTelefoneID,
+                    @DiscenteID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_TELEFONE_DISCENTE
+                FROM
+                    TELEFONE_DISCENTE
+                WHERE
+                    ID_DISCENTE = @DiscenteID
+                AND
+                    ID_TELEFONE = @NovoTelefoneID;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/* select * from telefone_discente
+EXEC sp_InserirTelefoneDiscente
+    @DiscenteCursoInstituicaoID = 'x',
+    @TELEFONE = '+5511981012345';
+*/

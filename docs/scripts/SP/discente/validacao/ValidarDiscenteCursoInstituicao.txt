@@ -1,0 +1,35 @@
+CREATE PROCEDURE sp_ValidarDiscenteCursoInstituicao
+    @DiscenteCursoInstituicaoID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF @DiscenteCursoInstituicaoID IS NULL
+    BEGIN
+        RAISERROR(
+            'Insira a identificação do vínculo entre discente, curso e instituição.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    IF NOT EXISTS(
+        SELECT
+            1
+        FROM
+            DISCENTE_CURSO_INSTITUICAO
+        WHERE
+            ID_DISCENTE_CURSO_INSTITUICAO = @DiscenteCursoInstituicaoID
+    )
+    BEGIN
+        RAISERROR(
+            'Vínculo entre discente, curso e instituição inexistente.',
+            16,
+            1
+        );
+        RETURN 1;
+    END
+
+    RETURN 0;
+END;

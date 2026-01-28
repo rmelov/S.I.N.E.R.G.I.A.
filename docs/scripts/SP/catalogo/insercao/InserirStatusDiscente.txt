@@ -1,0 +1,88 @@
+CREATE PROCEDURE sp_InserirStatusDiscente
+    @DESIGNACAO NVARCHAR(500),
+    @HIERARQUIA INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarStatusDiscente
+        @DESIGNACAO,
+        @HIERARQUIA;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    STATUS_DISCENTE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_STATUS_DISCENTE = @DESIGNACAO
+                OR
+                    HIERARQUIA_STATUS_DISCENTE = @HIERARQUIA
+            )   
+            BEGIN
+                INSERT INTO STATUS_DISCENTE(
+                    DESIGNACAO_STATUS_DISCENTE,
+                    HIERARQUIA_STATUS_DISCENTE
+                )
+                OUTPUT
+                    inserted.ID_STATUS_DISCENTE
+                INTO
+                    @OutputID
+                VALUES(
+                    @DESIGNACAO,
+                    @HIERARQUIA
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_STATUS_DISCENTE
+                FROM
+                    STATUS_DISCENTE
+                WHERE
+                    DESIGNACAO_STATUS_DISCENTE = @DESIGNACAO
+                OR
+                    HIERARQUIA_STATUS_DISCENTE = @HIERARQUIA;
+            END
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+            
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END;
+
+/*
+EXEC sp_InserirStatusDiscente
+    @DESIGNACAO = 'em busca de projeto',
+    @HIERARQUIA = 1;
+*/

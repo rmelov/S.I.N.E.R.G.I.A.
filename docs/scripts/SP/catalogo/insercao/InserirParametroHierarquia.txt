@@ -1,0 +1,104 @@
+CREATE PROCEDURE sp_InserirParametroHierarquia
+    @DESIGNACAO NVARCHAR(500),
+    @DESCRICAO VARCHAR(700),
+    @StatusProjetoID UNIQUEIDENTIFIER = NULL,
+    @StatusDiscenteID UNIQUEIDENTIFIER = NULL,
+    @OrdemAutoriaID UNIQUEIDENTIFIER = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+    SET @DESCRICAO = UPPER(TRIM(@DESCRICAO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarParametroHierarquia
+        @DESIGNACAO,
+        @DESCRICAO,
+        @StatusProjetoID,
+        @StatusDiscenteID,
+        @OrdemAutoriaID
+    
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+        
+        BEGIN TRANSACTION
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    PARAMETRO_HIERARQUIA
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_PARAMETRO = @DESIGNACAO
+                OR
+                    DESCRICAO_PARAMETRO = @DESCRICAO
+            )
+            BEGIN
+                INSERT INTO
+                    PARAMETRO_HIERARQUIA(
+                        DESIGNACAO_PARAMETRO,
+                        DESCRICAO_PARAMETRO,
+                        ID_STATUS_PROJETO,
+                        ID_STATUS_DISCENTE,
+                        ID_ORDEM_AUTORIA
+                    )
+                    OUTPUT
+                        inserted.ID_PARAMETRO_HIERARQUIA
+                    INTO
+                        @OutputID
+                    VALUES(
+                        @DESIGNACAO,
+                        @DESCRICAO,
+                        @StatusProjetoID,
+                        @StatusDiscenteID,
+                        @OrdemAutoriaID
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_PARAMETRO_HIERARQUIA
+                FROM
+                    PARAMETRO_HIERARQUIA
+                WHERE
+                    DESIGNACAO_PARAMETRO = @DESIGNACAO
+                OR
+                    DESCRICAO_PARAMETRO = @DESCRICAO;
+            END
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+END
+
+/*
+EXEC sp_InserirParametroHierarquia
+    @DESIGNACAO = '',
+    @DESCRICAO = '',
+    @StatusProjetoID = '';
+*/

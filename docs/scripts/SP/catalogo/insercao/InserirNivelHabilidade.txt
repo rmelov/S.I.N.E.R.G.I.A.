@@ -1,0 +1,90 @@
+CREATE PROCEDURE sp_InserirNivelHabilidade
+    @DESIGNACAO NVARCHAR(500),
+    @HIERARQUIA INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    
+    SET @DESIGNACAO = UPPER(TRIM(@DESIGNACAO));
+
+    DECLARE @Validacao INT;
+
+    EXEC @Validacao = sp_ValidarNivelHabilidade
+        @DESIGNACAO,
+        @HIERARQUIA;
+
+    IF @Validacao <> 0 RETURN @Validacao;
+
+    BEGIN TRY
+        DECLARE @OutputID TABLE(
+            NovoID UNIQUEIDENTIFIER
+        );
+
+        BEGIN TRANSACTION;
+            IF NOT EXISTS(
+                SELECT 
+                    1
+                FROM
+                    NIVEL_HABILIDADE
+                WITH(
+                    UPDLOCK,
+                    HOLDLOCK
+                )
+                WHERE
+                    DESIGNACAO_NIVEL = @DESIGNACAO
+                OR
+                    HIERARQUIA_NIVEL = @HIERARQUIA
+            )
+            BEGIN
+                INSERT INTO NIVEL_HABILIDADE(
+                    DESIGNACAO_NIVEL,
+                    HIERARQUIA_NIVEL
+                )
+                OUTPUT
+                    inserted.ID_NIVEL_HABILIDADE
+                INTO
+                    @OutputID
+                VALUES(
+                    @DESIGNACAO,
+                    @HIERARQUIA
+                );
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO @OutputID(
+                    NovoID
+                )
+                SELECT
+                    TOP 1
+                    ID_NIVEL_HABILIDADE
+                FROM
+                    NIVEL_HABILIDADE
+                WHERE
+                    DESIGNACAO_NIVEL = @DESIGNACAO
+                OR
+                    HIERARQUIA_NIVEL = @HIERARQUIA;
+            END
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            NovoID
+        FROM
+            @OutputID;
+            
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        EXEC sp_TratarErro;
+        THROW;
+    END CATCH
+
+END;
+
+/*
+EXEC sp_InserirNivelHabilidade
+    @DESIGNACAO = 'aprendiz',
+    @HIERARQUIA = 1;
+*/
